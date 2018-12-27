@@ -1,16 +1,16 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"time"
+
+	"go-panda/scraper"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/joho/godotenv"
@@ -26,55 +26,18 @@ func main() {
 
 	// select site to scrape (randomly)
 	siteURLS := []string{"https://www.worldwildlife.org/species/giant-panda", "https://www.photosforclass.com/search/panda"}
-	checkedSites := []string{}
+	// checkedSites := []string{}
 
 	site := siteURLS[selectRandom(siteURLS)]
 
-	checkedSites = append(checkedSites, site)
+	// checkedSites = append(checkedSites, site)
 
 	// get image from the site
 	// if no image, get another site and start again
 	// if image, send email containing image as attachment to me!
-	url := fixURL(site)
-
-	if url == "" {
-		fmt.Println("Site URL invalid.")
-		os.Exit(1)
-	}
-
-	fmt.Println("Getting images from " + url)
-	tlsConfig := &tls.Config{ // The &thing{a: b} syntax is equivalent to
-		InsecureSkipVerify: true, // new(thing(a: b)) in other languages.
-	}
-
-	transport := &http.Transport{ // And we take that tlsConfig object we instantiated
-		TLSClientConfig: tlsConfig, // and use it as the value for another new object's
-	}
-
-	// Create HTTP client with timeout & ignore https
-	client := &http.Client{
-		Timeout:   100 * time.Second,
-		Transport: transport,
-	}
-
-	// Create and modify HTTP request before sending
-	request, err := http.NewRequest("GET", url, nil)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	request.Header.Set("User-Agent", "Not Firefox")
-
-	// Make HTTP GET request
-	response, err := client.Do(request)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer response.Body.Close()
-
+	response := scraper.Scrape(site)
 	// Create output file
-	findImage(response.Body)
+	findImage(response)
 }
 
 func selectRandom(siteURLS []string) int {
@@ -83,16 +46,8 @@ func selectRandom(siteURLS []string) int {
 	return index
 }
 
-func fixURL(href string) string {
-	uri, err := url.Parse(href)
-	if err != nil {
-		return ""
-	}
-	return uri.String()
-}
-
-func findImage(responseBody io.Reader) {
-	document, err := goquery.NewDocumentFromReader(responseBody)
+func findImage(response *http.Response) {
+	document, err := goquery.NewDocumentFromResponse(response)
 	if err != nil {
 		log.Fatal("Error loading HTTP response body. ", err)
 	}
@@ -101,18 +56,20 @@ func findImage(responseBody io.Reader) {
 	validAlts := []string{}
 
 	document.Find("img").Each(func(index int, element *goquery.Selection) {
+		parent := element.Parent()
+		parentTitle, parentTitleExists := parent.Attr("title") //enabling parsing on photclass.com
 		imgSrc, srcExists := element.Attr("src")
 		imgAlt, altExists := element.Attr("alt")
 		re := regexp.MustCompile(`(?i)panda`) //case insensitive search
 		pandaAlt := re.FindString(imgAlt)
 		if srcExists && altExists && pandaAlt != "" {
-			fmt.Println(imgSrc)
 			validImages = append(validImages, imgSrc)
 			validAlts = append(validAlts, imgAlt)
+		} else if parentTitleExists {
+			validImages = append(validImages, imgSrc)
+			validAlts = append(validAlts, parentTitle)
 		}
 	})
-
-	fmt.Println(validImages)
 
 	if len(validImages) > 0 {
 		selectedIndex := selectRandom(validImages)
@@ -120,16 +77,19 @@ func findImage(responseBody io.Reader) {
 
 		selectedAlt := validAlts[selectedIndex]
 
-		fileName := selectedAlt + ".png"
+		fileName := "images/" + selectedAlt + ".png"
 		downloaded := downloadImage(fileName, selectedImage)
 
 		if downloaded {
+			//record image as downloaded
+			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
 			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", "Hi!, Find attached your daily picture of a panda!", "opeyemionikute@yahoo.com", fileName)
-			//record image as downloaded
 		}
 	} else {
+		// send disappointing message. moving forward, should restart the routine and try again
 		fmt.Println("No valid images found")
+		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow.", "opeyemionikute@yahoo.com", "")
 	}
 }
 
@@ -169,7 +129,10 @@ func sendMessage(sender, subject, body, recipient, attachment string) {
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 
 	message := mg.NewMessage(sender, subject, body, recipient)
-	message.AddAttachment(attachment)
+
+	if attachment != "" {
+		message.AddAttachment(attachment)
+	}
 	resp, id, err := mg.Send(message)
 
 	if err != nil {
