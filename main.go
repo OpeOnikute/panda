@@ -19,7 +19,7 @@ import (
 
 func main() {
 
-	err := godotenv.Load()
+	err := godotenv.Load("/go/src/go-panda/.env") //full path needed cause of the cron
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -77,7 +77,7 @@ func findImage(response *http.Response) {
 
 		selectedAlt := validAlts[selectedIndex]
 
-		fileName := "images/" + selectedAlt + ".png"
+		fileName := "/go/src/go-panda/images/" + selectedAlt + ".png"
 		downloaded := downloadImage(fileName, selectedImage)
 
 		if downloaded {
