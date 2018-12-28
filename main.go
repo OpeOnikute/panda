@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"go-panda/scraper"
@@ -16,6 +17,8 @@ import (
 	"github.com/joho/godotenv"
 	mailgun "github.com/mailgun/mailgun-go"
 )
+
+var mailRecipients = strings.Split(os.Getenv("MAIL_RECIPIENT"), ",")
 
 func main() {
 
@@ -84,12 +87,12 @@ func findImage(response *http.Response) {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", "Hi!, Find attached your daily picture of a panda!", os.Getenv("MAIL_RECIPIENT"), fileName)
+			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", "Hi!, Find attached your daily picture of a panda!", mailRecipients, fileName)
 		}
 	} else {
 		// send disappointing message. moving forward, should restart the routine and try again
 		fmt.Println("No valid images found")
-		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow.", os.Getenv("MAIL_RECIPIENT"), "")
+		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow.", mailRecipients, "")
 	}
 }
 
@@ -116,7 +119,7 @@ func downloadImage(fileName string, url string) bool {
 	return true
 }
 
-func sendMessage(sender, subject, body, recipient, attachment string) {
+func sendMessage(sender, subject, body string, recipients []string, attachment string) {
 	// Your available domain names can be found here:
 	// (https://app.mailgun.com/app/domains)
 	var domain = os.Getenv("MG_DOMAIN")
@@ -128,7 +131,11 @@ func sendMessage(sender, subject, body, recipient, attachment string) {
 	var privateAPIKey = os.Getenv("MG_API_KEY")
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 
-	message := mg.NewMessage(sender, subject, body, recipient)
+	message := mg.NewMessage(sender, subject, body)
+
+	for i := 0; i < len(recipients); i++ {
+		message.AddRecipient(recipients[i])
+	}
 
 	if attachment != "" {
 		message.AddAttachment(attachment)
@@ -136,6 +143,7 @@ func sendMessage(sender, subject, body, recipient, attachment string) {
 	resp, id, err := mg.Send(message)
 
 	if err != nil {
+		//TODO: Just log failed emails in a file. No need for fatality.
 		log.Fatal(err)
 	}
 
