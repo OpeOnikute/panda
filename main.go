@@ -84,12 +84,12 @@ func findImage(response *http.Response) {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", "Hi!, Find attached your daily picture of a panda!", "opeyemionikute@yahoo.com", fileName)
+			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", "Hi!, Find attached your daily picture of a panda!", os.Getenv("MAIL_RECIPIENT"), fileName)
 		}
 	} else {
 		// send disappointing message. moving forward, should restart the routine and try again
 		fmt.Println("No valid images found")
-		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow.", "opeyemionikute@yahoo.com", "")
+		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow.", os.Getenv("MAIL_RECIPIENT"), "")
 	}
 }
 

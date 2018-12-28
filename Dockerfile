@@ -5,8 +5,7 @@ WORKDIR /go/src/go-panda
 COPY . .
 
 # Use pre-compiled git and mercurial from base image
-RUN go get -d \
-    && apk del git mercurial
+RUN go get -d
 
 # Run at 10am everyday
 RUN chmod -R 777 /go/src/go-panda && \
