@@ -19,10 +19,27 @@ import (
 )
 
 var mailRecipients = strings.Split(os.Getenv("MAIL_RECIPIENT"), ",")
+var base = getBase()
+
+var successMessage = `
+Hi!, Find attached your daily picture of a panda!
+
+P.S. These messages are scheduled to go out at 10am everyday. If you receive it at any other time, something went wrong and we had to retry :)
+`
+
+var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow."
+
+func getBase() string {
+	if os.Getenv("GO_ENV") == "machine" {
+		return ""
+	}
+
+	return "/go/src/go-panda/"
+}
 
 func main() {
 
-	err := godotenv.Load("/go/src/go-panda/.env") //full path needed cause of the cron
+	err := godotenv.Load(base + ".env") //full path needed cause of the cron
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
@@ -80,19 +97,19 @@ func findImage(response *http.Response) {
 
 		selectedAlt := validAlts[selectedIndex]
 
-		fileName := "/go/src/go-panda/images/" + selectedAlt + ".png"
+		fileName := base + "images/" + selectedAlt + ".png"
 		downloaded := downloadImage(fileName, selectedImage)
 
 		if downloaded {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", "Hi!, Find attached your daily picture of a panda!", mailRecipients, fileName)
+			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName)
 		}
 	} else {
 		// send disappointing message. moving forward, should restart the routine and try again
 		fmt.Println("No valid images found")
-		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow.", mailRecipients, "")
+		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "")
 	}
 }
 
@@ -143,8 +160,23 @@ func sendMessage(sender, subject, body string, recipients []string, attachment s
 	resp, id, err := mg.Send(message)
 
 	if err != nil {
-		//TODO: Just log failed emails in a file. No need for fatality.
-		log.Fatal(err)
+		fmt.Println("Could not send message.")
+		if err.Error() == "Message not valid" {
+			// retry sending the message. obviously need to do this without duplicating later.
+			fmt.Println("Retrying...")
+			resp, id, err := mg.Send(message)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			fmt.Printf("ID: %s Resp: %s\n", id, resp)
+
+		} else {
+			//TODO: Just log failed emails in a file. No need for fatality.
+			log.Fatal(err)
+		}
+
 	}
 
 	fmt.Printf("ID: %s Resp: %s\n", id, resp)
