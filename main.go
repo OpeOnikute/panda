@@ -39,10 +39,10 @@ func getBase() string {
 }
 
 func main() {
-	getImage()
+	getImage(0)
 }
 
-func getImage() bool {
+func getImage(retryCount int) bool {
 
 	err := godotenv.Load(base + ".env") //full path needed cause of the cron
 	if err != nil {
@@ -62,8 +62,11 @@ func getImage() bool {
 	// if image, send email containing image as attachment to me!
 	response := scraper.Scrape(site)
 	// Create output file
-	findImage(response, 0)
+	imageSent := findImage(response, 0)
 
+	if !imageSent && retryCount < 3 {
+		return getImage(retryCount + 1)
+	}
 	return true
 }
 
@@ -116,7 +119,8 @@ func findImage(response *http.Response, retryCount int) bool {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName)
+			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName, 0)
+			return true
 		} else {
 			//restart
 			if retryCount < 3 {
@@ -128,10 +132,9 @@ func findImage(response *http.Response, retryCount int) bool {
 	} else {
 		// send disappointing message. moving forward, should restart the routine and try again
 		fmt.Println("No valid images found")
-		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "")
+		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "", 0)
+		return false
 	}
-
-	return true
 }
 
 func downloadImage(fileName string, url string, retryCount int) bool {
@@ -168,7 +171,7 @@ func downloadImage(fileName string, url string, retryCount int) bool {
 	return true
 }
 
-func sendMessage(sender, subject, body string, recipients []string, attachment string) bool {
+func sendMessage(sender, subject, body string, recipients []string, attachment string, retryCount int) bool {
 	// Your available domain names can be found here:
 	// (https://app.mailgun.com/app/domains)
 	var domain = os.Getenv("MG_DOMAIN")
@@ -192,8 +195,12 @@ func sendMessage(sender, subject, body string, recipients []string, attachment s
 	resp, id, err := mg.Send(message)
 
 	if err != nil {
-		fmt.Println("Could not send message. Retrying..", err)
-		return sendMessage(sender, subject, body, recipients, attachment)
+		fmt.Println("Could not send message.", err)
+		if retryCount < 3 {
+			log.Println("Retrying..")
+			return sendMessage(sender, subject, body, recipients, attachment, retryCount+1)
+		}
+		log.Fatal(err)
 	}
 
 	fmt.Printf("ID: %s Resp: %s\n", id, resp)
