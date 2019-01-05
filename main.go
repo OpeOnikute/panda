@@ -18,6 +18,7 @@ import (
 	mailgun "github.com/mailgun/mailgun-go"
 )
 
+var maxRetries = 3 //retry operations only three times
 var mailRecipients = strings.Split(os.Getenv("MAIL_RECIPIENT"), ",")
 var base = getBase()
 
@@ -38,6 +39,10 @@ func getBase() string {
 }
 
 func main() {
+	getImage()
+}
+
+func getImage() bool {
 
 	err := godotenv.Load(base + ".env") //full path needed cause of the cron
 	if err != nil {
@@ -57,7 +62,9 @@ func main() {
 	// if image, send email containing image as attachment to me!
 	response := scraper.Scrape(site)
 	// Create output file
-	findImage(response)
+	findImage(response, 0)
+
+	return true
 }
 
 func selectRandom(siteURLS []string) int {
@@ -66,10 +73,15 @@ func selectRandom(siteURLS []string) int {
 	return index
 }
 
-func findImage(response *http.Response) {
+func findImage(response *http.Response, retryCount int) bool {
 	document, err := goquery.NewDocumentFromResponse(response)
 	if err != nil {
-		log.Fatal("Error loading HTTP response body. ", err)
+		log.Println("Error loading HTTP response body. ", err)
+		if retryCount < maxRetries {
+			log.Println("Retrying..")
+			return findImage(response, retryCount+1)
+		}
+		return false
 	}
 
 	validImages := []string{}
@@ -98,24 +110,34 @@ func findImage(response *http.Response) {
 		selectedAlt := validAlts[selectedIndex]
 
 		fileName := base + "images/" + selectedAlt + ".png"
-		downloaded := downloadImage(fileName, selectedImage)
+		downloaded := downloadImage(fileName, selectedImage, 0)
 
 		if downloaded {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
 			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName)
+		} else {
+			//restart
+			if retryCount < 3 {
+				log.Println("Retrying..")
+				return findImage(response, retryCount+1)
+			}
+			return false
 		}
 	} else {
 		// send disappointing message. moving forward, should restart the routine and try again
 		fmt.Println("No valid images found")
 		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "")
 	}
+
+	return true
 }
 
-func downloadImage(fileName string, url string) bool {
+func downloadImage(fileName string, url string, retryCount int) bool {
 	response, e := http.Get(url)
 	if e != nil {
+		//if there's no response just fail to avoid an infinite loop if the external url is down
 		log.Fatal(e)
 	}
 	defer response.Body.Close()
@@ -123,20 +145,30 @@ func downloadImage(fileName string, url string) bool {
 	//open a file for writing
 	file, err := os.Create(fileName)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		if retryCount < maxRetries {
+			log.Println("Retrying..")
+			return downloadImage(fileName, url, retryCount+1)
+		}
+		return false
 	}
 	defer file.Close()
 
 	// Use io.Copy to just dump the response body to the file. This supports huge files
 	_, err = io.Copy(file, response.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		if retryCount < maxRetries {
+			log.Println("Retrying..")
+			return downloadImage(fileName, url, retryCount+1)
+		}
+		return false
 	}
 
 	return true
 }
 
-func sendMessage(sender, subject, body string, recipients []string, attachment string) {
+func sendMessage(sender, subject, body string, recipients []string, attachment string) bool {
 	// Your available domain names can be found here:
 	// (https://app.mailgun.com/app/domains)
 	var domain = os.Getenv("MG_DOMAIN")
@@ -160,24 +192,10 @@ func sendMessage(sender, subject, body string, recipients []string, attachment s
 	resp, id, err := mg.Send(message)
 
 	if err != nil {
-		fmt.Println("Could not send message.")
-		if err.Error() == "Message not valid" {
-			// retry sending the message. obviously need to do this without duplicating later.
-			fmt.Println("Retrying...")
-			resp, id, err := mg.Send(message)
-
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			fmt.Printf("ID: %s Resp: %s\n", id, resp)
-
-		} else {
-			//TODO: Just log failed emails in a file. No need for fatality.
-			log.Fatal(err)
-		}
-
+		fmt.Println("Could not send message. Retrying..", err)
+		return sendMessage(sender, subject, body, recipients, attachment)
 	}
 
 	fmt.Printf("ID: %s Resp: %s\n", id, resp)
+	return true
 }
