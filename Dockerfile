@@ -5,7 +5,7 @@ WORKDIR /go/src/go-panda
 COPY . .
 
 # Use pre-compiled git and mercurial from base image
-RUN go get -d && mkdir images && touch .env
+RUN go get -d && touch .env
 
 # Run at 10am everyday
 RUN chmod -R 777 /go/src/go-panda && \

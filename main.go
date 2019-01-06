@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -112,32 +112,33 @@ func findImage(response *http.Response, retryCount int) bool {
 
 		selectedAlt := validAlts[selectedIndex]
 
-		fileName := base + "images/" + selectedAlt + ".png"
+		fileName := selectedAlt + ".png"
 		downloaded := downloadImage(fileName, selectedImage, 0)
 
-		if downloaded {
+		if len(downloaded) > 0 {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName, 0)
+			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded, 0)
 			return true
-		} else {
-			//restart
-			if retryCount < 3 {
-				log.Println("Retrying..")
-				return findImage(response, retryCount+1)
-			}
-			return false
 		}
-	} else {
-		// send disappointing message. moving forward, should restart the routine and try again
-		fmt.Println("No valid images found")
-		sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "", 0)
+
+		//retry
+		if retryCount < 3 {
+			log.Println("Retrying..")
+			return findImage(response, retryCount+1)
+		}
 		return false
+
 	}
+
+	// send disappointing message. moving forward, should restart the routine and try again
+	fmt.Println("No valid images found")
+	sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "", nil, 0)
+	return false
 }
 
-func downloadImage(fileName string, url string, retryCount int) bool {
+func downloadImage(fileName string, url string, retryCount int) []byte {
 	response, e := http.Get(url)
 	if e != nil {
 		//if there's no response just fail to avoid an infinite loop if the external url is down
@@ -145,41 +146,29 @@ func downloadImage(fileName string, url string, retryCount int) bool {
 	}
 	defer response.Body.Close()
 
-	//open a file for writing
-	file, err := os.Create(fileName)
+	//get the file details
+	size := response.ContentLength
+	//make byte array to send as attachment
+	bytes := make([]byte, size)
+
+	buffer := bufio.NewReader(response.Body)
+	_, err := buffer.Read(bytes)
+
 	if err != nil {
 		log.Println(err)
 		if retryCount < maxRetries {
 			log.Println("Retrying..")
 			return downloadImage(fileName, url, retryCount+1)
 		}
-		return false
-	}
-	defer file.Close()
-
-	// Use io.Copy to just dump the response body to the file. This supports huge files
-	_, err = io.Copy(file, response.Body)
-	if err != nil {
-		log.Println(err)
-		if retryCount < maxRetries {
-			log.Println("Retrying..")
-			return downloadImage(fileName, url, retryCount+1)
-		}
-		return false
+		return nil
 	}
 
-	return true
+	return bytes
 }
 
-func sendMessage(sender, subject, body string, recipients []string, attachment string, retryCount int) bool {
-	// Your available domain names can be found here:
-	// (https://app.mailgun.com/app/domains)
+func sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
 	var domain = os.Getenv("MG_DOMAIN")
 
-	// The API Keys are found in your Account Menu, under "Settings":
-	// (https://app.mailgun.com/app/account/security)
-
-	// starts with "key-"
 	var privateAPIKey = os.Getenv("MG_API_KEY")
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 
@@ -189,8 +178,9 @@ func sendMessage(sender, subject, body string, recipients []string, attachment s
 		message.AddRecipient(recipients[i])
 	}
 
-	if attachment != "" {
-		message.AddAttachment(attachment)
+	//send as byte array to prevent trying to save and read from disk, which is buggy.
+	if fileName != "" && len(attachment) > 0 {
+		message.AddBufferAttachment(fileName, attachment)
 	}
 	resp, id, err := mg.Send(message)
 
@@ -198,7 +188,7 @@ func sendMessage(sender, subject, body string, recipients []string, attachment s
 		fmt.Println("Could not send message.", err)
 		if retryCount < 3 {
 			log.Println("Retrying..")
-			return sendMessage(sender, subject, body, recipients, attachment, retryCount+1)
+			return sendMessage(sender, subject, body, recipients, fileName, attachment, retryCount+1)
 		}
 		log.Fatal(err)
 	}
