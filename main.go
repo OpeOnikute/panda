@@ -50,7 +50,7 @@ func getImage(retryCount int) bool {
 	}
 
 	// select site to scrape (randomly)
-	siteURLS := []string{"https://www.worldwildlife.org/species/giant-panda", "https://www.photosforclass.com/search/panda"}
+	siteURLS := []string{"https://www.worldwildlife.org/species/giant-panda", "https://www.photosforclass.com/search/panda", "https://www.photosforclass.com/search/panda/2", "https://www.photosforclass.com/search/panda/3", "https://www.photosforclass.com/search/panda/4"}
 	// checkedSites := []string{}
 
 	site := siteURLS[selectRandom(siteURLS)]
@@ -168,8 +168,19 @@ func downloadImage(fileName string, url string, retryCount int) []byte {
 
 func sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
 	var domain = os.Getenv("MG_DOMAIN")
-
 	var privateAPIKey = os.Getenv("MG_API_KEY")
+
+	//verbose logging to debug the cron
+	fmt.Println(domain)
+	fmt.Println(privateAPIKey)
+	fmt.Println(sender)
+	fmt.Println(subject)
+	fmt.Println(body)
+	fmt.Println(recipients)
+	fmt.Println(fileName)
+	fmt.Println(attachment)
+	fmt.Println(retryCount)
+
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 
 	message := mg.NewMessage(sender, subject, body)
