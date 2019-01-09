@@ -19,7 +19,6 @@ import (
 )
 
 var maxRetries = 3 //retry operations only three times
-var mailRecipients = strings.Split(os.Getenv("MAIL_RECIPIENT"), ",")
 var base = getBase()
 
 var successMessage = `
@@ -77,6 +76,9 @@ func selectRandom(siteURLS []string) int {
 }
 
 func findImage(response *http.Response, retryCount int) bool {
+
+	var mailRecipients = strings.Split(os.Getenv("MAIL_RECIPIENT"), ",")
+
 	document, err := goquery.NewDocumentFromResponse(response)
 	if err != nil {
 		log.Println("Error loading HTTP response body. ", err)
@@ -171,14 +173,11 @@ func sendMessage(sender, subject, body string, recipients []string, fileName str
 	var privateAPIKey = os.Getenv("MG_API_KEY")
 
 	//verbose logging to debug the cron
-	fmt.Println(domain)
-	fmt.Println(privateAPIKey)
 	fmt.Println(sender)
 	fmt.Println(subject)
 	fmt.Println(body)
 	fmt.Println(recipients)
 	fmt.Println(fileName)
-	fmt.Println(attachment)
 	fmt.Println(retryCount)
 
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
