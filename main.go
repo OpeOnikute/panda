@@ -1,8 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -114,10 +114,13 @@ func findImage(response *http.Response, retryCount int) bool {
 
 		selectedAlt := validAlts[selectedIndex]
 
-		fileName := selectedAlt + ".png"
-		downloaded := downloadImage(fileName, selectedImage, 0)
+		downloaded, contentType := downloadImage(selectedImage, 0)
 
 		if len(downloaded) > 0 {
+
+			fileExt := "." + strings.Replace(contentType, "image/", "", 1)
+			fileName := selectedAlt + fileExt
+
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
@@ -140,7 +143,7 @@ func findImage(response *http.Response, retryCount int) bool {
 	return false
 }
 
-func downloadImage(fileName string, url string, retryCount int) []byte {
+func downloadImage(url string, retryCount int) ([]byte, string) {
 	response, e := http.Get(url)
 	if e != nil {
 		//if there's no response just fail to avoid an infinite loop if the external url is down
@@ -148,37 +151,23 @@ func downloadImage(fileName string, url string, retryCount int) []byte {
 	}
 	defer response.Body.Close()
 
-	//get the file details
-	size := response.ContentLength
-	//make byte array to send as attachment
-	bytes := make([]byte, size)
-
-	buffer := bufio.NewReader(response.Body)
-	_, err := buffer.Read(bytes)
-
+	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Println(err)
 		if retryCount < maxRetries {
 			log.Println("Retrying..")
-			return downloadImage(fileName, url, retryCount+1)
+			return downloadImage(url, retryCount+1)
 		}
-		return nil
+		return nil, ""
 	}
 
-	return bytes
+	contentType := response.Header["Content-Type"][0]
+	return body, contentType
 }
 
 func sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
 	var domain = os.Getenv("MG_DOMAIN")
 	var privateAPIKey = os.Getenv("MG_API_KEY")
-
-	//verbose logging to debug the cron
-	fmt.Println(sender)
-	fmt.Println(subject)
-	fmt.Println(body)
-	fmt.Println(recipients)
-	fmt.Println(fileName)
-	fmt.Println(retryCount)
 
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 
