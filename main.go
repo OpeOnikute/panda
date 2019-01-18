@@ -24,7 +24,7 @@ var base = getBase()
 var successMessage = `
 Hi!, Find attached your daily picture of a panda!
 
-P.S. These messages are scheduled to go out at 10am everyday. If you receive it at any other time, something went wrong and we had to retry :)
+P.S. These messages are scheduled to go out at 11am everyday. If you receive it at any other time, something went wrong and we had to retry :)
 `
 
 var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow."
