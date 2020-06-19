@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,15 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"go-panda/scraper"
-
 	"github.com/PuerkitoBio/goquery"
-	"github.com/joho/godotenv"
-	mailgun "github.com/mailgun/mailgun-go"
+	mailgun "github.com/mailgun/mailgun-go/v4"
+	"github.com/opeonikute/go-panda/scraper"
+
+	"github.com/aws/aws-lambda-go/lambda"
 )
 
-var maxRetries = 3 //retry operations only three times
-var base = getBase()
+var maxRetries = 1 //retry operations only three times
 
 var successMessage = `
 Hi!, Find attached your daily picture of a panda!
@@ -29,24 +30,21 @@ P.S. These messages are scheduled to go out at 11am everyday. If you receive it 
 
 var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow."
 
-func getBase() string {
-	if os.Getenv("GO_ENV") == "machine" {
-		return ""
-	}
-
-	return "/go/src/go-panda/"
-}
+const emailSender = "opeyemi@mg.opeonikute.dev"
 
 func main() {
-	getImage(0)
+	lambda.Start(handleRequest)
+}
+
+func handleRequest(ctx context.Context) (bool, error) {
+	result := getImage(0)
+	if result != true {
+		return false, errors.New("Email was not sent. Image function returned false")
+	}
+	return true, nil
 }
 
 func getImage(retryCount int) bool {
-
-	err := godotenv.Load(base + ".env") //full path needed cause of the cron
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
 
 	// select site to scrape (randomly)
 	siteURLS := []string{"https://www.worldwildlife.org/species/giant-panda", "https://www.photosforclass.com/search/panda", "https://www.photosforclass.com/search/panda/2", "https://www.photosforclass.com/search/panda/3", "https://www.photosforclass.com/search/panda/4"}
@@ -114,6 +112,10 @@ func findImage(response *http.Response, retryCount int) bool {
 
 		selectedAlt := validAlts[selectedIndex]
 
+		if selectedAlt == "" {
+			selectedAlt = "panda"
+		}
+
 		downloaded, contentType := downloadImage(selectedImage, 0)
 
 		if len(downloaded) > 0 {
@@ -124,7 +126,7 @@ func findImage(response *http.Response, retryCount int) bool {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage("opeonikuts@gmail.com", "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded, 0)
+			sendMessage(emailSender, "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded, 0)
 			return true
 		}
 
@@ -139,7 +141,7 @@ func findImage(response *http.Response, retryCount int) bool {
 
 	// send disappointing message. moving forward, should restart the routine and try again
 	fmt.Println("No valid images found")
-	sendMessage("opeonikuts@gmail.com", "Bad news, no panda dose today", errorMessage, mailRecipients, "", nil, 0)
+	sendMessage(emailSender, "Bad news, no panda dose today", errorMessage, mailRecipients, "", nil, 0)
 	return false
 }
 
@@ -170,6 +172,7 @@ func sendMessage(sender, subject, body string, recipients []string, fileName str
 	var privateAPIKey = os.Getenv("MG_API_KEY")
 
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
+	mg.SetAPIBase(mailgun.APIBaseEU)
 
 	message := mg.NewMessage(sender, subject, body)
 
@@ -181,7 +184,11 @@ func sendMessage(sender, subject, body string, recipients []string, fileName str
 	if fileName != "" && len(attachment) > 0 {
 		message.AddBufferAttachment(fileName, attachment)
 	}
-	resp, id, err := mg.Send(message)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	resp, id, err := mg.Send(ctx, message)
 
 	if err != nil {
 		fmt.Println("Could not send message.", err)

@@ -28,3 +28,6 @@ Go routine that scrapes the interwebs for images of pandas and emails them to me
 - MG_DOMAIN - Your Mailgun domain.
 - MG_API_KEY - Your Mailgun private API key. **Do not commit this to source control.**
 - MAIL_RECIPIENT - The email you want the pictures sent to.
+
+# TODO
+- Split the lambda into a seperate repo and export this as a package

@@ -10,8 +10,6 @@ import (
 	"time"
 )
 
-func main() {}
-
 // Scrape makes a basic HTTP GET request to a site and returns the response.
 func Scrape(siteURL string) *http.Response {
 

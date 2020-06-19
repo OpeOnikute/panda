@@ -332,3 +332,5 @@ ASALocalRun/
 .env
 
 images/*
+
+build-lambda.sh
