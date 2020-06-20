@@ -1,11 +1,14 @@
 package panda
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"mime/multipart"
 	"net/http"
 	"regexp"
 	"strings"
@@ -28,6 +31,16 @@ var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send t
 
 const emailSender = "no-reply@opeonikute.dev"
 
+type cdUploadResponse struct {
+	PublicId     string `json:"public_id"`
+	Version      uint   `json:"version"`
+	ResourceType string `json:"resource_type"`
+	Format       string `json:"format"`
+	Size         int    `json:"bytes"`
+	URL          string `json:"url"`
+	SecureURL    string `json:"secure_url"`
+}
+
 // GoPanda ...
 type GoPanda struct {
 	Config Settings
@@ -42,7 +55,9 @@ func (g *GoPanda) Run(retryCount int) bool {
 
 	site := siteURLS[selectRandom(siteURLS)]
 
-	// checkedSites = append(checkedSites, site)
+	// ideally would want to check the database for existing panda of the day.
+	// but don't want to make a database query for this every time.
+	// instead we can make the panda of the day idempotent.
 
 	// get image from the site
 	// if no image, get another site and start again
@@ -191,6 +206,74 @@ func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string,
 		log.Fatal(err)
 	}
 
+	// save image to cloudinary and database here.
+	_, err = g.uploadImageToCloudinary(fileName, attachment)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// save to database
+
 	fmt.Printf("ID: %s Resp: %s\n", id, resp)
 	return true
+}
+
+func (g *GoPanda) uploadImageToCloudinary(imgName string, imgBody []byte) (string, error) {
+
+	cloudName := g.Config.CdCloudName
+	preset := g.Config.CdUploadPreset
+
+	cloudinaryURL := fmt.Sprintf("https://api.cloudinary.com/v1_1/%s/image/upload", cloudName)
+
+	params := map[string]string{
+		"upload_preset": preset,
+	}
+
+	// TODO: Set a timeout parameter on this
+	client := &http.Client{}
+
+	body := new(bytes.Buffer)
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", imgName)
+	if err != nil {
+		return "", err
+	}
+	part.Write(imgBody)
+
+	// add other fields to form
+	for key, val := range params {
+		_ = writer.WriteField(key, val)
+	}
+	err = writer.Close()
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequest("POST", cloudinaryURL, body)
+
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	res, err := client.Do(req)
+
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+
+	// decode response
+	dec := json.NewDecoder(res.Body)
+	upInfo := new(cdUploadResponse)
+
+	if err := dec.Decode(upInfo); err != nil {
+		log.Println(err)
+		return "", err
+	}
+
+	fmt.Println("Uploaded image to cloudinary successfully.")
+	return upInfo.SecureURL, nil
 }

@@ -11,6 +11,8 @@ type Settings struct {
 	MgDomain       string
 	MailRecipients string
 	EmailSender    string
+	CdCloudName    string
+	CdUploadPreset string
 }
 
 func (s *Settings) get(name string) (interface{}, error) {
