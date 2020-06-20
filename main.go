@@ -14,10 +14,9 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/aws/aws-lambda-go/lambda"
 	mailgun "github.com/mailgun/mailgun-go/v4"
 	"github.com/opeonikute/go-panda/scraper"
-
-	"github.com/aws/aws-lambda-go/lambda"
 )
 
 var maxRetries = 1 //retry operations only three times
@@ -30,21 +29,34 @@ P.S. These messages are scheduled to go out at 11am everyday. If you receive it 
 
 var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow."
 
-const emailSender = "opeyemi@mg.opeonikute.dev"
+const emailSender = "no-reply@opeonikute.dev"
 
 func main() {
 	lambda.Start(handleRequest)
 }
 
 func handleRequest(ctx context.Context) (bool, error) {
-	result := getImage(0)
+	goPanda := GoPanda{
+		config: Config{
+			MgDomain:       os.Getenv("MG_DOMAIN"),
+			MgKey:          os.Getenv("MG_API_KEY"),
+			MailRecipients: os.Getenv("MAIL_RECIPIENT"),
+		},
+	}
+	result := goPanda.Run(0)
 	if result != true {
 		return false, errors.New("Email was not sent. Image function returned false")
 	}
 	return true, nil
 }
 
-func getImage(retryCount int) bool {
+// GoPanda ...
+type GoPanda struct {
+	config Config
+}
+
+// Run exposes the main functionality of the package
+func (g *GoPanda) Run(retryCount int) bool {
 
 	// select site to scrape (randomly)
 	siteURLS := []string{"https://www.worldwildlife.org/species/giant-panda", "https://www.photosforclass.com/search/panda", "https://www.photosforclass.com/search/panda/2", "https://www.photosforclass.com/search/panda/3", "https://www.photosforclass.com/search/panda/4"}
@@ -59,10 +71,10 @@ func getImage(retryCount int) bool {
 	// if image, send email containing image as attachment to me!
 	response := scraper.Scrape(site)
 	// Create output file
-	imageSent := findImage(response, 0)
+	imageSent := g.findImage(response, 0)
 
 	if !imageSent && retryCount < 3 {
-		return getImage(retryCount + 1)
+		return g.Run(retryCount + 1)
 	}
 	return true
 }
@@ -73,16 +85,17 @@ func selectRandom(siteURLS []string) int {
 	return index
 }
 
-func findImage(response *http.Response, retryCount int) bool {
+func (g *GoPanda) findImage(response *http.Response, retryCount int) bool {
 
-	var mailRecipients = strings.Split(os.Getenv("MAIL_RECIPIENT"), ",")
+	// cast config interface to string and split into array
+	var mailRecipients = strings.Split(g.config.MailRecipients, ",")
 
 	document, err := goquery.NewDocumentFromResponse(response)
 	if err != nil {
 		log.Println("Error loading HTTP response body. ", err)
 		if retryCount < maxRetries {
 			log.Println("Retrying..")
-			return findImage(response, retryCount+1)
+			return g.findImage(response, retryCount+1)
 		}
 		return false
 	}
@@ -116,7 +129,7 @@ func findImage(response *http.Response, retryCount int) bool {
 			selectedAlt = "panda"
 		}
 
-		downloaded, contentType := downloadImage(selectedImage, 0)
+		downloaded, contentType := g.downloadImage(selectedImage, 0)
 
 		if len(downloaded) > 0 {
 
@@ -126,14 +139,14 @@ func findImage(response *http.Response, retryCount int) bool {
 			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
 			//send image as attachment
-			sendMessage(emailSender, "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded, 0)
+			g.sendMessage(emailSender, "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded, 0)
 			return true
 		}
 
 		//retry
 		if retryCount < 3 {
 			log.Println("Retrying..")
-			return findImage(response, retryCount+1)
+			return g.findImage(response, retryCount+1)
 		}
 		return false
 
@@ -141,11 +154,11 @@ func findImage(response *http.Response, retryCount int) bool {
 
 	// send disappointing message. moving forward, should restart the routine and try again
 	fmt.Println("No valid images found")
-	sendMessage(emailSender, "Bad news, no panda dose today", errorMessage, mailRecipients, "", nil, 0)
+	g.sendMessage(emailSender, "Bad news, no panda dose today", errorMessage, mailRecipients, "", nil, 0)
 	return false
 }
 
-func downloadImage(url string, retryCount int) ([]byte, string) {
+func (g *GoPanda) downloadImage(url string, retryCount int) ([]byte, string) {
 	response, e := http.Get(url)
 	if e != nil {
 		//if there's no response just fail to avoid an infinite loop if the external url is down
@@ -158,7 +171,7 @@ func downloadImage(url string, retryCount int) ([]byte, string) {
 		log.Println(err)
 		if retryCount < maxRetries {
 			log.Println("Retrying..")
-			return downloadImage(url, retryCount+1)
+			return g.downloadImage(url, retryCount+1)
 		}
 		return nil, ""
 	}
@@ -167,9 +180,10 @@ func downloadImage(url string, retryCount int) ([]byte, string) {
 	return body, contentType
 }
 
-func sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
-	var domain = os.Getenv("MG_DOMAIN")
-	var privateAPIKey = os.Getenv("MG_API_KEY")
+func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
+
+	domain := g.config.MgDomain
+	privateAPIKey := g.config.MgKey
 
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 	mg.SetAPIBase(mailgun.APIBaseEU)
@@ -194,7 +208,7 @@ func sendMessage(sender, subject, body string, recipients []string, fileName str
 		fmt.Println("Could not send message.", err)
 		if retryCount < 3 {
 			log.Println("Retrying..")
-			return sendMessage(sender, subject, body, recipients, fileName, attachment, retryCount+1)
+			return g.sendMessage(sender, subject, body, recipients, fileName, attachment, retryCount+1)
 		}
 		log.Fatal(err)
 	}
