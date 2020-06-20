@@ -5,17 +5,17 @@ import (
 	"reflect"
 )
 
-// Config exposes all package settings
-type Config struct {
+// Settings exposes all package settings
+type Settings struct {
 	MgKey          string
 	MgDomain       string
 	MailRecipients string
 	EmailSender    string
 }
 
-func (c *Config) get(name string) (interface{}, error) {
+func (s *Settings) get(name string) (interface{}, error) {
 
-	rv := reflect.ValueOf(c)
+	rv := reflect.ValueOf(s)
 
 	fv := reflect.Indirect(rv).FieldByName(name)
 	if !fv.IsValid() {

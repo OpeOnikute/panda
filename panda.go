@@ -30,7 +30,7 @@ const emailSender = "no-reply@opeonikute.dev"
 
 // GoPanda ...
 type GoPanda struct {
-	config Config
+	Config Settings
 }
 
 // Run exposes the main functionality of the package
@@ -66,7 +66,7 @@ func selectRandom(siteURLS []string) int {
 func (g *GoPanda) findImage(response *http.Response, retryCount int) bool {
 
 	// cast config interface to string and split into array
-	var mailRecipients = strings.Split(g.config.MailRecipients, ",")
+	var mailRecipients = strings.Split(g.Config.MailRecipients, ",")
 
 	document, err := goquery.NewDocumentFromResponse(response)
 	if err != nil {
@@ -160,8 +160,8 @@ func (g *GoPanda) downloadImage(url string, retryCount int) ([]byte, string) {
 
 func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
 
-	domain := g.config.MgDomain
-	privateAPIKey := g.config.MgKey
+	domain := g.Config.MgDomain
+	privateAPIKey := g.Config.MgKey
 
 	mg := mailgun.NewMailgun(domain, privateAPIKey)
 	mg.SetAPIBase(mailgun.APIBaseEU)
