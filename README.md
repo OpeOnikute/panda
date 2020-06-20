@@ -31,3 +31,4 @@ Go routine that scrapes the interwebs for images of pandas and emails them to me
 
 # TODO
 - Split the lambda into a seperate repo and export this as a package
+- Create IAM Role, lambda function, event service rule with terraform
