@@ -2,19 +2,16 @@ package panda
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/aws/aws-lambda-go/lambda"
 	mailgun "github.com/mailgun/mailgun-go/v4"
 	"github.com/opeonikute/go-panda/scraper"
 )
@@ -30,25 +27,6 @@ P.S. These messages are scheduled to go out at 11am everyday. If you receive it 
 var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow."
 
 const emailSender = "no-reply@opeonikute.dev"
-
-func main() {
-	lambda.Start(handleRequest)
-}
-
-func handleRequest(ctx context.Context) (bool, error) {
-	goPanda := GoPanda{
-		config: Config{
-			MgDomain:       os.Getenv("MG_DOMAIN"),
-			MgKey:          os.Getenv("MG_API_KEY"),
-			MailRecipients: os.Getenv("MAIL_RECIPIENT"),
-		},
-	}
-	result := goPanda.Run(0)
-	if result != true {
-		return false, errors.New("Email was not sent. Image function returned false")
-	}
-	return true, nil
-}
 
 // GoPanda ...
 type GoPanda struct {
