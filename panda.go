@@ -22,9 +22,9 @@ import (
 var maxRetries = 1 //retry operations only three times
 
 var successMessage = `
-Hi!, Find attached your daily picture of a panda!
+Hi!, Here is today's panda!
 
-P.S. These messages are scheduled to go out at 11am everyday. If you receive it at any other time, something went wrong and we had to retry :)
+P.S. These messages are scheduled to go out at 8am GMT everyday. If you receive it at any other time, something went wrong and we had to retry :)
 `
 
 var errorMessage = "Hi!, Sadly we couldn't find any picture of a panda to send to you today. We'll be back tomorrow."
@@ -43,7 +43,9 @@ type cdUploadResponse struct {
 
 // GoPanda ...
 type GoPanda struct {
-	Config Settings
+	Config     Settings
+	DB         db
+	SourceSite string
 }
 
 // Run exposes the main functionality of the package
@@ -63,6 +65,8 @@ func (g *GoPanda) Run(retryCount int) bool {
 	// if no image, get another site and start again
 	// if image, send email containing image as attachment to me!
 	response := scraper.Scrape(site)
+	g.SourceSite = site
+
 	// Create output file
 	imageSent := g.findImage(response, 0)
 
@@ -195,7 +199,7 @@ func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string,
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	resp, id, err := mg.Send(ctx, message)
+	resp, _, err := mg.Send(ctx, message)
 
 	if err != nil {
 		fmt.Println("Could not send message.", err)
@@ -206,17 +210,49 @@ func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string,
 		log.Fatal(err)
 	}
 
+	fmt.Printf("Sent email to recipients. Resp: %s\n", resp)
+
 	// save image to cloudinary and database here.
-	_, err = g.uploadImageToCloudinary(fileName, attachment)
+	url, err := g.uploadImageToCloudinary(fileName, attachment)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// save to database
+	_, err = g.savePOD(fileName, g.SourceSite, url)
 
-	fmt.Printf("ID: %s Resp: %s\n", id, resp)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	return true
+}
+
+func (g *GoPanda) savePOD(fileName, source, url string) (Entry, error) {
+	// connect to database
+	var mongoURL = g.Config.MongoURL
+	var mongoDB = g.Config.MongoDB
+
+	en := Entry{
+		FileName: fileName,
+		Source:   source,
+		URL:      url,
+	}
+
+	err := g.DB.Connect(mongoURL, mongoDB)
+	if err != nil {
+		return en, err
+	}
+
+	// save new entry
+	_, err = g.DB.InsertPOD(en)
+	if err != nil {
+		return en, err
+	}
+
+	fmt.Println("Saved image to database.")
+	return en, err
 }
 
 func (g *GoPanda) uploadImageToCloudinary(imgName string, imgBody []byte) (string, error) {
@@ -274,6 +310,6 @@ func (g *GoPanda) uploadImageToCloudinary(imgName string, imgBody []byte) (strin
 		return "", err
 	}
 
-	fmt.Println("Uploaded image to cloudinary successfully.")
+	fmt.Println("Uploaded image to cloudinary.")
 	return upInfo.SecureURL, nil
 }

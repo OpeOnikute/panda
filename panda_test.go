@@ -15,6 +15,8 @@ func TestPanda(t *testing.T) {
 			MailRecipients: os.Getenv("MAIL_RECIPIENT"),
 			CdCloudName:    os.Getenv("CD_CLOUD_NAME"),
 			CdUploadPreset: os.Getenv("CD_UPLOAD_PRESET"),
+			MongoURL:       os.Getenv("MONGO_URL"),
+			MongoDB:        os.Getenv("MONGO_DATABASE"),
 		},
 	}
 	_ = goPanda.Run(0)

@@ -13,6 +13,8 @@ type Settings struct {
 	EmailSender    string
 	CdCloudName    string
 	CdUploadPreset string
+	MongoURL       string
+	MongoDB        string
 }
 
 func (s *Settings) get(name string) (interface{}, error) {
