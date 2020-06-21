@@ -2,6 +2,10 @@
 
 Go package that scrapes the interwebs for images of pandas and emails them and stores in a database for future fetching. If you're here to see today's Panda, the website is https://daily-panda.herokuapp.com.
 
+The other repos are:
+- Lambda function - https://github.com/OpeOnikute/go-panda-lambda
+- Website - https://github.com/OpeOnikute/go-panda-site
+
 ## How to use
 
 - Run `go get github.com/opeonikute/panda`
