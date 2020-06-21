@@ -1,8 +1,10 @@
 package panda_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/opeonikute/panda"
 )
@@ -20,4 +22,24 @@ func TestPanda(t *testing.T) {
 		},
 	}
 	_ = goPanda.Run(0)
+}
+
+func TestGetPOD(t *testing.T) {
+	// TODO: Create a POD first
+	goPanda := panda.GoPanda{
+		Config: panda.Settings{
+			MongoURL: os.Getenv("MONGO_URL"),
+			MongoDB:  os.Getenv("MONGO_DATABASE"),
+		},
+	}
+
+	tm := time.Now()
+	res, err := goPanda.GetPOD(tm)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	fmt.Printf("Panda found: %s\n", res)
 }

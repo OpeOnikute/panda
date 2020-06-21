@@ -69,7 +69,8 @@ func (db *db) InsertPOD(newEn Entry) (Entry, error) {
 	// TODO: Ensure we have already connected to the database here
 
 	// if POD already exists, update the image
-	existingEn, err := db.findPOD()
+	date := getTodaysDate()
+	existingEn, err := db.FindPOD(date)
 
 	if err != nil {
 		return newEn, err
@@ -96,8 +97,7 @@ func (db *db) InsertPOD(newEn Entry) (Entry, error) {
 }
 
 // Uses today's date to find the POD
-func (db *db) findPOD() (Entry, error) {
-	date := getTodaysDate()
+func (db *db) FindPOD(date time.Time) (Entry, error) {
 	var en Entry
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -133,5 +133,10 @@ func (db *db) updatePOD(en Entry) (Entry, error) {
 func getTodaysDate() time.Time {
 	// MM-DD-YYYY
 	tm := time.Now()
+	return GetDate(tm)
+}
+
+// GetDate converts a time to 12am so it becomes a date
+func GetDate(tm time.Time) time.Time {
 	return time.Date(tm.Year(), tm.Month(), tm.Day(), 0, 0, 0, 0, tm.Location())
 }

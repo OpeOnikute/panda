@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -47,6 +48,9 @@ type GoPanda struct {
 	DB         db
 	SourceSite string
 }
+
+// ErrPandaNotFound is thrown when we don't get a panda of the day for a specific date
+var ErrPandaNotFound = errors.New("no panda was found")
 
 // Run exposes the main functionality of the package
 func (g *GoPanda) Run(retryCount int) bool {
@@ -227,6 +231,34 @@ func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string,
 	}
 
 	return true
+}
+
+// GetPOD fetches the panda of a specific day.
+// tm - allows you specify the specific date so you can call time.Now() and pass that in.
+func (g *GoPanda) GetPOD(tm time.Time) (Entry, error) {
+	// connect to database
+	var mongoURL = g.Config.MongoURL
+	var mongoDB = g.Config.MongoDB
+	var en Entry
+
+	err := g.DB.Connect(mongoURL, mongoDB)
+	if err != nil {
+		return en, err
+	}
+
+	dt := GetDate(tm)
+	en, err = g.DB.FindPOD(dt)
+
+	if err != nil {
+		return en, err
+	}
+
+	// confirm a panda was actually found.
+	if en.Source == "" && en.FileName == "" && en.URL == "" {
+		return en, ErrPandaNotFound
+	}
+
+	return en, nil
 }
 
 func (g *GoPanda) savePOD(fileName, source, url string) (Entry, error) {
