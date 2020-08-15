@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/opeonikute/panda/util"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,14 +21,16 @@ type dBCollection struct {
 	Entries *mongo.Collection
 }
 
+// Entry ...
 type Entry struct {
-	ID       primitive.ObjectID `json:"_id" bson:"_id"`
-	URL      string             `json:"url" bson:"url"`
-	Source   string             `json:"source" bson:"source"`
-	FileName string             `json:"filename" bson:"filename"`
-	Date     time.Time          `json:"date" bson:"date"`
-	Created  time.Time          `json:"created" bson:"created"`
-	Updated  time.Time          `json:"updated" bson:"updated"`
+	ID           primitive.ObjectID `json:"_id" bson:"_id"`
+	URL          string             `json:"url" bson:"url"`
+	Source       string             `json:"source" bson:"source"`
+	FileName     string             `json:"filename" bson:"filename"`
+	WordOfTheDay string             `json:"wordOfTheDay" bson:"wordOfTheDay"`
+	Date         time.Time          `json:"date" bson:"date"`
+	Created      time.Time          `json:"created" bson:"created"`
+	Updated      time.Time          `json:"updated" bson:"updated"`
 }
 
 // Connect creates a new DB connection
@@ -81,11 +84,13 @@ func (db *db) InsertPOD(newEn Entry) (Entry, error) {
 		existingEn.URL = newEn.URL
 		existingEn.Source = newEn.Source
 		existingEn.FileName = newEn.FileName
+		existingEn.WordOfTheDay = util.GetDailyWord()
 		return db.updatePOD(existingEn)
 	}
 
 	// insert new entry with POD
 	newEn.ID = primitive.NewObjectID()
+	newEn.WordOfTheDay = util.GetDailyWord()
 	newEn.Date = getTodaysDate()
 	newEn.Created = time.Now()
 	newEn.Updated = time.Now()

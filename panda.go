@@ -273,6 +273,7 @@ func (g *GoPanda) savePOD(fileName, source, url string) (Entry, error) {
 	}
 
 	err := g.DB.Connect(mongoURL, mongoDB)
+	// TODO: close the db connection
 	if err != nil {
 		return en, err
 	}

@@ -69,6 +69,10 @@ The compose file is used to start a local Mongo container.
 - MONGO_URL - Mongo connection string
 - MONGO_DATABASE - Mongo database name
 
+## Tests
+```
+MG_DOMAIN=xxxxxx.opeonikute.dev MG_API_KEY=xxxxxxxxxx MAIL_RECIPIENT=test@yahoo.com CD_UPLOAD_PRESET=panda_images  CD_CLOUD_NAME=xxxxxxxxx MONGO_URL=mongodb://opeo:root@localhost MONGO_DATABASE=go-panda bash -c "go test
+```
 # TODO
-- Add features to store the image, and retrieve the image of the day.
+- Config to turn off sending email etc
 - Create IAM Role, lambda function, event service rule with terraform.
