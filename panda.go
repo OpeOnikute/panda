@@ -23,7 +23,11 @@ import (
 var maxRetries = 1 //retry operations only three times
 
 var successMessage = `
-Hi!, Here is today's panda!
+Hello panda lover! 
+
+Attached, you will find today's panda.
+
+You can also see him/her on the cover of today's magazine at https://daily-panda.site 🤩🤩
 
 P.S. These messages are scheduled to go out at 8am GMT everyday. If you receive it at any other time, something went wrong and we had to retry :)
 `
