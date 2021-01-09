@@ -295,7 +295,7 @@ func (g *GoPanda) savePOD(fileName, source, url string) (Entry, error) {
 	return en, err
 }
 
-func (g *GoPanda) generateCDSecret(params map[string]interface{}) string {
+func (g *GoPanda) generateCDSignature(params map[string]interface{}) string {
 
 	// Instructions for generating the signature can be found here:
 	// https://cloudinary.com/documentation/upload_images#generating_authentication_signatures
@@ -335,7 +335,7 @@ func (g *GoPanda) CreateGif() (string, error) {
 	signParams["tag"] = tag
 	signParams["timestamp"] = fmt.Sprintf("%d", timestamp)
 
-	sign := g.generateCDSecret(signParams)
+	sign := g.generateCDSignature(signParams)
 
 	cloudinaryURL := fmt.Sprintf("https://api.cloudinary.com/v1_1/%s/image/multi", cloudName)
 
