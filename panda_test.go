@@ -43,3 +43,21 @@ func TestGetPOD(t *testing.T) {
 
 	fmt.Printf("Panda found: %s\n", res)
 }
+
+func TestCreateGif(t *testing.T) {
+	goPanda := panda.GoPanda{
+		Config: panda.Settings{
+			CdCloudName: os.Getenv("CD_CLOUD_NAME"),
+			CdAPIKey:    os.Getenv("CD_API_KEY"),
+			CdAPISecret: os.Getenv("CD_API_SECRET"),
+		},
+	}
+
+	resp, err := goPanda.CreateGif()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	fmt.Println("Response Body:", resp)
+}

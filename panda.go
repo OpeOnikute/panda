@@ -3,6 +3,8 @@ package panda
 import (
 	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -290,6 +293,70 @@ func (g *GoPanda) savePOD(fileName, source, url string) (Entry, error) {
 
 	fmt.Println("Saved image to database.")
 	return en, err
+}
+
+func (g *GoPanda) generateCDSecret(params map[string]interface{}) string {
+
+	// Instructions for generating the signature can be found here:
+	// https://cloudinary.com/documentation/upload_images#generating_authentication_signatures
+	secret := g.Config.CdAPISecret
+	arr := []string{}
+
+	// Separate the parameter names from their values with an = and
+	// join the parameter/value pairs together with an &.
+	for key, elem := range params {
+		arr = append(arr, fmt.Sprintf("%s=%s", key, elem))
+	}
+
+	// Sort the elements alphabetically
+	sort.Strings(arr)
+
+	str := strings.Join(arr, "&") + secret
+
+	// create the sha1 hash and return as a string
+	sha := sha1.New()
+	sha.Write([]byte(str))
+
+	return hex.EncodeToString(sha.Sum(nil))
+}
+
+// CreateGif makes a gif on the Cloudinary account with all images
+// with the tag 'panda_image'
+func (g *GoPanda) CreateGif() (string, error) {
+	cloudName := g.Config.CdCloudName
+	apiKey := g.Config.CdAPIKey
+
+	tag := "panda_image"
+	timestamp := int32(time.Now().Unix())
+	transf := "dl_800,w_400,h_400,c_fill_pad,g_auto"
+
+	signParams := make(map[string]interface{})
+	signParams["transformation"] = transf
+	signParams["tag"] = tag
+	signParams["timestamp"] = fmt.Sprintf("%d", timestamp)
+
+	sign := g.generateCDSecret(signParams)
+
+	cloudinaryURL := fmt.Sprintf("https://api.cloudinary.com/v1_1/%s/image/multi", cloudName)
+
+	payloadStr := `{"tag":"%s", "api_key": "%s", "transformation": "%s", "signature":"%s", "timestamp":"%d"}`
+
+	// send POST request with JSON payload
+	payload := []byte(fmt.Sprintf(payloadStr, tag, apiKey, transf, sign, timestamp))
+	req, err := http.NewRequest("POST", cloudinaryURL, bytes.NewBuffer(payload))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	fmt.Println("Response Status:", resp.Status)
+	body, _ := ioutil.ReadAll(resp.Body)
+	res := string(body)
+	return res, nil
 }
 
 func (g *GoPanda) uploadImageToCloudinary(imgName string, imgBody []byte) (string, error) {

@@ -13,6 +13,8 @@ type Settings struct {
 	EmailSender    string
 	CdCloudName    string
 	CdUploadPreset string
+	CdAPIKey       string
+	CdAPISecret    string
 	MongoURL       string
 	MongoDB        string
 }
