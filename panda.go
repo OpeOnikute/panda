@@ -95,9 +95,6 @@ func selectRandom(siteURLS []string) int {
 
 func (g *GoPanda) findImage(response *http.Response, retryCount int) bool {
 
-	// cast config interface to string and split into array
-	var mailRecipients = strings.Split(g.Config.MailRecipients, ",")
-
 	document, err := goquery.NewDocumentFromResponse(response)
 	if err != nil {
 		log.Println("Error loading HTTP response body. ", err)
@@ -144,10 +141,27 @@ func (g *GoPanda) findImage(response *http.Response, retryCount int) bool {
 			fileExt := "." + strings.Replace(contentType, "image/", "", 1)
 			fileName := selectedAlt + fileExt
 
-			//record image as downloaded
 			fmt.Println("Downloaded image " + fileName)
-			//send image as attachment
-			g.sendMessage(emailSender, "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded, 0)
+
+			if g.Config.SendMail {
+				// cast config interface to string and split into array
+				var mailRecipients = strings.Split(g.Config.MailRecipients, ",")
+
+				_, err = g.sendMessage(emailSender, "Your daily dose of panda!", successMessage, mailRecipients, fileName, downloaded)
+
+				if err != nil {
+					fmt.Println("Couldn't send email.")
+					fmt.Println(err)
+				}
+			}
+
+			_, err = g.saveImage(fileName, downloaded)
+
+			if err != nil {
+				fmt.Println("Couldn't save image.")
+				fmt.Println(err)
+			}
+
 			return true
 		}
 
@@ -156,13 +170,12 @@ func (g *GoPanda) findImage(response *http.Response, retryCount int) bool {
 			log.Println("Retrying..")
 			return g.findImage(response, retryCount+1)
 		}
-		return false
 
+		return false
 	}
 
-	// send disappointing message. moving forward, should restart the routine and try again
-	fmt.Println("No valid images found")
-	g.sendMessage(emailSender, "Bad news, no panda dose today", errorMessage, mailRecipients, "", nil, 0)
+	// TODO: Add some sort of monitoring, if this is important enough.
+	fmt.Println("No valid images found. Doing nothing...")
 	return false
 }
 
@@ -188,7 +201,7 @@ func (g *GoPanda) downloadImage(url string, retryCount int) ([]byte, string) {
 	return body, contentType
 }
 
-func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte, retryCount int) bool {
+func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string, fileName string, attachment []byte) (bool, error) {
 
 	domain := g.Config.MgDomain
 	privateAPIKey := g.Config.MgKey
@@ -214,30 +227,30 @@ func (g *GoPanda) sendMessage(sender, subject, body string, recipients []string,
 
 	if err != nil {
 		fmt.Println("Could not send message.", err)
-		if retryCount < 3 {
-			log.Println("Retrying..")
-			return g.sendMessage(sender, subject, body, recipients, fileName, attachment, retryCount+1)
-		}
-		log.Fatal(err)
+		return false, err
 	}
 
 	fmt.Printf("Sent email to recipients. Resp: %s\n", resp)
 
-	// save image to cloudinary and database here.
+	return true, nil
+}
+
+func (g *GoPanda) saveImage(fileName string, attachment []byte) (bool, error) {
+
 	url, err := g.uploadImageToCloudinary(fileName, attachment)
 
 	if err != nil {
-		log.Fatal(err)
+		return false, err
 	}
 
 	// save to database
 	_, err = g.savePOD(fileName, g.SourceSite, url)
 
 	if err != nil {
-		log.Fatal(err)
+		return false, err
 	}
 
-	return true
+	return true, nil
 }
 
 // GetPOD fetches the panda of a specific day.

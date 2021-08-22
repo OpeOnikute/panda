@@ -17,6 +17,7 @@ type Settings struct {
 	CdAPISecret    string
 	MongoURL       string
 	MongoDB        string
+	SendMail       bool
 }
 
 func (s *Settings) get(name string) (interface{}, error) {

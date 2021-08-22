@@ -71,7 +71,7 @@ The compose file is used to start a local Mongo container.
 
 ## Tests
 ```
-MG_DOMAIN=xxxxxx.opeonikute.dev MG_API_KEY=xxxxxxxxxx MAIL_RECIPIENT=test@yahoo.com CD_UPLOAD_PRESET=panda_images  CD_CLOUD_NAME=xxxxxxxxx MONGO_URL=mongodb://opeo:root@localhost MONGO_DATABASE=go-panda bash -c "go test
+MG_DOMAIN=xxxxxx.opeonikute.dev MG_API_KEY=xxxxxxxxxx MAIL_RECIPIENT=test@yahoo.com CD_UPLOAD_PRESET=panda_images  CD_CLOUD_NAME=xxxxxxxxx MONGO_URL=mongodb://opeo:root@localhost SEND_EMAIL=false MONGO_DATABASE=go-panda bash -c "go test"
 ```
 # TODO
 - Config to turn off sending email etc
